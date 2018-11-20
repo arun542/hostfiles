@@ -1,0 +1,167 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "appName": {
+            "type": "string",
+            "defaultValue": "AvidFlowLogsApp"
+        },
+        "appServicePlanTier": {
+            "type": "string",
+            "defaultValue": "Standard"
+        },
+        "appServicePlanName": {
+            "type": "string",
+            "defaultValue": "S3"
+        },
+        "appServicePlanCapacity": {
+            "type": "int",
+            "defaultValue": 2
+        },
+        "zipSource": {
+            "type": "string",
+            "defaultValue": "https://s3-us-west-2.amazonaws.com/avidcore/azure/FlowLogSetup.zip"
+        },       
+        "nsgSourceDataConnection": {
+            "type": "string",
+            "defaultValue": "[mandatory storage account connection string for nsg flow log data]"
+        },
+        "avidAddress" : {
+            "type": "string",
+            "defaultValue": "https://collector-staging.avidsecure.io/httpcollector/nsglogs"
+        },
+        "avidActivityAddress" : {
+            "type": "string",
+            "defaultValue": "https://collector-staging.avidsecure.io/httpcollector/nsglogs"
+        },
+        "customerId" : {
+            "type" : "string"
+        },
+        "storageId" : {
+            "type" : "string"
+        },
+        "subscriptionIds" : {
+            "type" : "string"
+        }
+    },
+    "variables": {
+        "functionAppName": "[parameters('appName')]",
+        "hostingPlanName": "[variables('functionAppName')]",
+        "storageAccountName": "[concat('func', uniquestring(resourceGroup().id))]",
+        "storageAccountid": "[concat(resourceGroup().id,'/providers/','Microsoft.Storage/storageAccounts/', variables('storageAccountName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "name": "[variables('storageAccountName')]",
+            "apiVersion": "2015-06-15",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "accountType": "Standard_LRS"
+            }
+        },
+        {
+            "type": "Microsoft.Web/serverfarms",
+            "apiVersion": "2016-09-01",
+            "name": "[variables('hostingPlanName')]",
+            "location": "[resourceGroup().location]",
+            "sku": {
+                "tier": "[parameters('appServicePlanTier')]",
+                "name": "[parameters('appServicePlanName')]",
+                "capacity": "[parameters('appServicePlanCapacity')]",
+                "size": "Large"
+            }
+        },
+        {
+            "apiVersion": "2016-08-01",
+            "type": "Microsoft.Web/sites",
+            "name": "[variables('functionAppName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "functionapp",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+            ],
+            "properties": {
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+                "siteConfig": {
+                    "AlwaysOn": true,
+                    "appSettings": [
+                        {
+                            "name": "AzureWebJobsDashboard",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';AccountKey=', listKeys(variables('storageAccountid'),'2015-05-01-preview').key1)]"
+                        },
+                        {
+                            "name": "AzureWebJobsStorage",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';AccountKey=', listKeys(variables('storageAccountid'),'2015-05-01-preview').key1)]"
+                        },
+                        {
+                            "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';AccountKey=', listKeys(variables('storageAccountid'),'2015-05-01-preview').key1)]"
+                        },
+                        {
+                            "name": "WEBSITE_CONTENTSHARE",
+                            "value": "[toLower(variables('functionAppName'))]"
+                        },
+                        {
+                            "name": "FUNCTIONS_EXTENSION_VERSION",
+                            "value": "~1"
+                        },
+                        {
+                            "name": "WEBSITE_NODE_DEFAULT_VERSION",
+                            "value": "6.5.0"
+                        },
+                        {
+                            "name": "blobContainerName",
+                            "value": "insights-logs-networksecuritygroupflowevent"
+                        },
+                        {
+                            "name": "blobContainerNameActivity",
+                            "value": "insights-operational-logs"
+                        },
+                        {
+                            "name": "nsgSourceDataAccount",
+                            "value": "nsgSourceDataConnection"
+                        },
+                        {
+                            "name": "nsgSourceDataConnection",
+                            "value": "[parameters('nsgSourceDataConnection')]"
+                        },
+                        {
+                            "name": "avidAddress",
+                            "value": "[parameters('avidAddress')]"
+                        },
+                        {
+                            "name": "avidActivityAddress",
+                            "value": "[parameters('avidActivityAddress')]"
+                        },
+                        {
+                            "name" : "customerId",
+                            "value" : "[parameters('customerId')]"
+                        },
+                        {
+                            "name" : "storageId",
+                            "value" : "[parameters('storageId')]"
+                        },
+                        {
+                            "name" : "subscriptionIds",
+                            "value" : "[parameters('subscriptionIds')]"
+                        },
+                        {
+                            "name": "cefLogAccount",
+                            "value": ""
+                        },
+                        {
+                            "name": "logIncomingJSON",
+                            "value": "false"
+                        },
+                        {
+                            "name": "logOutgoingCEF",
+                            "value": "false"
+                        }
+                    ]
+                }
+            }
+        }
+    ]
+}
